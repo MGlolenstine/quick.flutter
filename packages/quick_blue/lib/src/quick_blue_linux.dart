@@ -50,7 +50,7 @@ class QuickBlueLinux extends QuickBluePlatform {
   @override
   Future<bool> isBluetoothAvailable() async {
     await _ensureInitialized();
-    _log('isBluetoothAvailable invoke success');
+    print('isBluetoothAvailable invoke success');
 
     return _activeAdapter != null;
   }
@@ -59,7 +59,7 @@ class QuickBlueLinux extends QuickBluePlatform {
   Future<void> startScan() async {
     if (_activeAdapter != null && !_activeAdapter!.discovering) {
       await _ensureInitialized();
-      _log('startScan invoke success');
+      print('startScan invoke success');
 
       _activeAdapter!.startDiscovery();
       _client.devices.forEach(_onDeviceAdd);
@@ -70,7 +70,7 @@ class QuickBlueLinux extends QuickBluePlatform {
   Future<void> stopScan() async {
     if (_activeAdapter != null && _activeAdapter!.discovering) {
       await _ensureInitialized();
-      _log('stopScan invoke success');
+      print('stopScan invoke success');
 
       _activeAdapter!.stopDiscovery();
     }
@@ -95,11 +95,11 @@ class QuickBlueLinux extends QuickBluePlatform {
   void connect(String deviceId) {
     var device = _client.devices.firstWhereOrNull((device) => device.address == deviceId);
     if (device != null) {
-      if (!device.paired) {
-        device.pair().then((voi) => device.connect().then((voi) => _log("Connected!")));
-      } else {
-        device.connect().then((voi) => _log("Connected!"));
-      }
+      // if (!device.paired) {
+      //   device.pair().then((voi) => device.connect().then((voi) => print("Connected!")));
+      // } else {
+      device.connect().then((voi) => print("Connected!"));
+      // }
     }
   }
 
@@ -107,7 +107,7 @@ class QuickBlueLinux extends QuickBluePlatform {
   void disconnect(String deviceId) {
     var device = _client.devices.firstWhereOrNull((device) => device.address == deviceId);
     if (device != null) {
-      device.disconnect().then((voi) => _log("Disconnected!"));
+      device.disconnect().then((voi) => print("Disconnected!"));
     }
   }
 
@@ -133,7 +133,7 @@ class QuickBlueLinux extends QuickBluePlatform {
   void discoverServices(String deviceId) {
     var device = _getDeviceById(deviceId);
     if (device != null) {
-      _log("Services ${device.gattServices.length}");
+      print("Services ${device.gattServices.length}");
       for (var gattService in device.gattServices) {
         List<String> characteristics = [];
         for (var characteristic in gattService.characteristics) {

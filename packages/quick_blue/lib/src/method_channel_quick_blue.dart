@@ -89,6 +89,9 @@ class MethodChannelQuickBlue extends QuickBluePlatform {
       String characteristic = characteristicValue['characteristic'];
       Uint8List value = Uint8List.fromList(characteristicValue['value']); // In case of _Uint8ArrayView
       onValueChanged?.call(deviceId, characteristic, value);
+    } else if (message['written'] != null) {
+      bool written = message['written'] == 1;
+      onValueWritten?.call(written);
     } else if (message['mtuConfig'] != null) {
       _mtuConfigController.add(message['mtuConfig']);
     }

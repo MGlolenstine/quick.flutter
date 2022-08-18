@@ -16,19 +16,16 @@ class QuickBlue {
 
   static void setInstance(QuickBluePlatform instance) => _platform = instance;
 
-  static void setLogger(QuickLogger logger) =>
-      _platform.setLogger(logger);
+  static void setLogger(QuickLogger logger) => _platform.setLogger(logger);
 
-  static Future<bool> isBluetoothAvailable() =>
-      _platform.isBluetoothAvailable();
+  static Future<bool> isBluetoothAvailable() => _platform.isBluetoothAvailable();
 
   static Future<void> startScan() => _platform.startScan();
 
   static void stopScan() => _platform.stopScan();
 
   static Stream<BlueScanResult> get scanResultStream {
-    return _platform.scanResultStream
-      .map((item) => BlueScanResult.fromMap(item));
+    return _platform.scanResultStream.map((item) => BlueScanResult.fromMap(item));
   }
 
   static void connect(String deviceId) => _platform.connect(deviceId);
@@ -62,4 +59,8 @@ class QuickBlue {
   }
 
   static Future<int> requestMtu(String deviceId, int expectedMtu) => _platform.requestMtu(deviceId, expectedMtu);
+
+  static void setWrittenHandler(OnValueWritten? onValueWritten) {
+    _platform.onValueWritten = onValueWritten;
+  }
 }

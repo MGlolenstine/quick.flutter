@@ -17,6 +17,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  intl: ^0.17.0
 
   quick_blue:
     # When depending on this package from a real application you should use:
