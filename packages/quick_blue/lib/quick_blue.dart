@@ -20,6 +20,8 @@ class QuickBlue {
 
   static Future<bool> isBluetoothAvailable() => _platform.isBluetoothAvailable();
 
+  static Stream<AvailabilityState> get availabilityChangeStream => _platform.availabilityChangeStream.map(AvailabilityState.parse);
+
   static Future<void> startScan() => _platform.startScan();
 
   static void stopScan() => _platform.stopScan();

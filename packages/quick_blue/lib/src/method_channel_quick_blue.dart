@@ -9,6 +9,7 @@ import 'quick_blue_platform_interface.dart';
 class MethodChannelQuickBlue extends QuickBluePlatform {
   static const _method = MethodChannel('quick_blue/method');
   static const _eventScanResult = EventChannel('quick_blue/event.scanResult');
+  static const _eventAvailabilityChange = EventChannel('quick_blue/event.availabilityChange');
   static const _messageConnector = BasicMessageChannel('quick_blue/message.connector', StandardMessageCodec());
 
   MethodChannelQuickBlue() {
@@ -32,6 +33,11 @@ class MethodChannelQuickBlue extends QuickBluePlatform {
     return result;
   }
 
+  final Stream<int> _availabilityChangeStream = _eventAvailabilityChange.receiveBroadcastStream({'name': 'availabilityChange'}).cast();
+
+  @override
+  Stream<int> get availabilityChangeStream => _availabilityChangeStream;
+
   @override
   Future<void> startScan() async {
     await _method.invokeMethod('startScan');
@@ -40,8 +46,8 @@ class MethodChannelQuickBlue extends QuickBluePlatform {
 
   @override
   Future<void> stopScan() async {
-    await _method.invokeMethod('startScan');
-    _log('startScan invokeMethod success');
+    await _method.invokeMethod('stopScan');
+    _log('stopScan invokeMethod success');
   }
 
   final Stream<dynamic> _scanResultStream = _eventScanResult.receiveBroadcastStream({'name': 'scanResult'});

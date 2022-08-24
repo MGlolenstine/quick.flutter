@@ -37,6 +37,8 @@ abstract class QuickBluePlatform extends PlatformInterface {
 
   Future<bool> isBluetoothAvailable();
 
+  Stream<int> get availabilityChangeStream;
+
   Future<void> startScan();
 
   Future<void> stopScan();

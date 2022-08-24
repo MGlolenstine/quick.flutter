@@ -28,18 +28,21 @@ extension CBPeripheral {
     }
   }
 
-  public func getCharacteristic(_ characteristic: String, of service: String) -> CBCharacteristic {
+  public func getCharacteristic(_ characteristic: String, of service: String) -> CBCharacteristic? {
     let s = self.services?.first {
       $0.uuid.uuidStr == service || "0000\($0.uuid.uuidStr)-\(GSS_SUFFIX)" == service
     }
     let c = s?.characteristics?.first {
       $0.uuid.uuidStr == characteristic || "0000\($0.uuid.uuidStr)-\(GSS_SUFFIX)" == characteristic
     }
-    return c!
+    return c
   }
 
   public func setNotifiable(_ bleInputProperty: String, for characteristic: String, of service: String) {
-    setNotifyValue(bleInputProperty != "disabled", for: getCharacteristic(characteristic, of: service))
+    guard let characteristic = getCharacteristic(characteristic, of: service) else{
+        return
+    }
+    setNotifyValue(bleInputProperty != "disabled", for: characteristic)
   }
 }
 
@@ -51,11 +54,13 @@ public class QuickBlueDarwin: NSObject, FlutterPlugin {
     let messenger = registrar.messenger
     #endif
     let method = FlutterMethodChannel(name: "quick_blue/method", binaryMessenger: messenger)
+    let eventAvailabilityChange = FlutterEventChannel(name: "quick_blue/event.availabilityChange", binaryMessenger: messenger)
     let eventScanResult = FlutterEventChannel(name: "quick_blue/event.scanResult", binaryMessenger: messenger)
     let messageConnector = FlutterBasicMessageChannel(name: "quick_blue/message.connector", binaryMessenger: messenger)
 
     let instance = QuickBlueDarwin()
     registrar.addMethodCallDelegate(instance, channel: method)
+    eventAvailabilityChange.setStreamHandler(instance)
     eventScanResult.setStreamHandler(instance)
     instance.messageConnector = messageConnector
   }
@@ -63,6 +68,7 @@ public class QuickBlueDarwin: NSObject, FlutterPlugin {
   private lazy var manager: CBCentralManager = { CBCentralManager(delegate: self, queue: nil) }()
   private var discoveredPeripherals = Dictionary<String, CBPeripheral>()
 
+  private var availabilityChangeSink: FlutterEventSink?
   private var scanResultSink: FlutterEventSink?
   private var messageConnector: FlutterBasicMessageChannel!
 
@@ -116,7 +122,11 @@ public class QuickBlueDarwin: NSObject, FlutterPlugin {
         result(FlutterError(code: "IllegalArgument", message: "Unknown deviceId:\(deviceId)", details: nil))
         return
       }
-      peripheral.setNotifiable(bleInputProperty, for: characteristic, of: service)
+      guard let c = peripheral.getCharacteristic(characteristic, of: service) else {
+        result(FlutterError(code: "IllegalArgument", message: "Unknown characteristic:\(characteristic)", details: nil))
+        return
+      }
+      peripheral.setNotifyValue(bleInputProperty != "disabled", for: c)
       result(nil)
     case "readValue":
       let arguments = call.arguments as! Dictionary<String, Any>
@@ -127,7 +137,11 @@ public class QuickBlueDarwin: NSObject, FlutterPlugin {
         result(FlutterError(code: "IllegalArgument", message: "Unknown deviceId:\(deviceId)", details: nil))
         return
       }
-      peripheral.readValue(for: peripheral.getCharacteristic(characteristic, of: service))
+      guard let c = peripheral.getCharacteristic(characteristic, of: service) else {
+        result(FlutterError(code: "IllegalArgument", message: "Unknown characteristic:\(characteristic)", details: nil))
+        return
+      }
+      peripheral.readValue(for: c)
       result(nil)
     case "writeValue":
       let arguments = call.arguments as! Dictionary<String, Any>
@@ -141,7 +155,11 @@ public class QuickBlueDarwin: NSObject, FlutterPlugin {
         return
       }
       let type = bleOutputProperty == "withoutResponse" ? CBCharacteristicWriteType.withoutResponse : CBCharacteristicWriteType.withResponse
-      peripheral.writeValue(value.data, for: peripheral.getCharacteristic(characteristic, of: service), type: type)
+      guard let c = peripheral.getCharacteristic(characteristic, of: service) else {
+        result(FlutterError(code: "IllegalArgument", message: "Unknown characteristic:\(characteristic)", details: nil))
+        return
+      }
+      peripheral.writeValue(value.data, for: c, type: type)
       result(nil)
     case "requestMtu":
       let arguments = call.arguments as! Dictionary<String, Any>
@@ -162,7 +180,7 @@ public class QuickBlueDarwin: NSObject, FlutterPlugin {
 
 extension QuickBlueDarwin: CBCentralManagerDelegate {
   public func centralManagerDidUpdateState(_ central: CBCentralManager) {
-    print("centralManagerDidUpdateState \(central.state.rawValue)")
+    availabilityChangeSink?(central.state.rawValue)
   }
 
   public func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral, advertisementData: [String: Any], rssi RSSI: NSNumber) {
@@ -201,7 +219,10 @@ extension QuickBlueDarwin: FlutterStreamHandler {
       return nil
     }
     print("QuickBlueDarwin onListenWithArguments: \(name)")
-    if name == "scanResult" {
+    if name == "availabilityChange" {
+      availabilityChangeSink = events
+      availabilityChangeSink?(manager.state.rawValue) // Initializes CBCentralManager and returns the current state when hot restarting
+    } else if name == "scanResult" {
       scanResultSink = events
     }
     return nil
@@ -212,7 +233,9 @@ extension QuickBlueDarwin: FlutterStreamHandler {
       return nil
     }
     print("QuickBlueDarwin onCancelWithArguments: \(name)")
-    if name == "scanResult" {
+    if name == "availabilityChange" {
+      availabilityChangeSink = nil
+    } else if name == "scanResult" {
       scanResultSink = nil
     }
     return nil

@@ -1,9 +1,9 @@
 import 'dart:async';
-import 'dart:developer';
 import 'dart:typed_data';
 
 import 'package:bluez/bluez.dart';
 import 'package:collection/collection.dart';
+import 'package:convert/convert.dart';
 import 'package:logging/logging.dart';
 
 import 'quick_blue_platform_interface.dart';
@@ -25,13 +25,21 @@ class QuickBlueLinux extends QuickBluePlatform {
       await _client.connect();
 
       _activeAdapter ??= _client.adapters.firstWhereOrNull((adapter) => adapter.powered);
-      _activeAdapter ??= _client.adapters.firstWhereOrNull((adapter) => adapter.powered);
-      if (_activeAdapter == null && _client.adapters.isNotEmpty) {
-        _activeAdapter = _client.adapters[0];
-        _activeAdapter?.setPowered(true);
+      if (_activeAdapter == null) {
+        if (_client.adapters.isEmpty) {
+          throw Exception('Bluetooth adapter unavailable');
+        }
+        await _client.adapters.first.setPowered(true);
+        _activeAdapter = _client.adapters.first;
       }
       _client.deviceAdded.listen(_onDeviceAdd);
 
+      _activeAdapter?.propertiesChanged.listen((List<String> properties) {
+        if (properties.contains('Powered')) {
+          _availabilityStateController.add(availabilityState);
+        }
+      });
+      _availabilityStateController.add(availabilityState);
       isInitialized = true;
     }
   }
@@ -50,17 +58,26 @@ class QuickBlueLinux extends QuickBluePlatform {
   @override
   Future<bool> isBluetoothAvailable() async {
     await _ensureInitialized();
-    print('isBluetoothAvailable invoke success');
+    _log('isBluetoothAvailable invoke success');
+    return _activeAdapter!.powered;
+  }
 
-    return _activeAdapter != null;
+  // FIXME Close
+  final StreamController<AvailabilityState> _availabilityStateController = StreamController.broadcast();
+
+  @override
+  Stream<int> get availabilityChangeStream => _availabilityStateController.stream.map((state) => state.value);
+
+  AvailabilityState get availabilityState {
+    return _activeAdapter!.powered ? AvailabilityState.poweredOn : AvailabilityState.poweredOff;
   }
 
   @override
   Future<void> startScan() async {
-    if (_activeAdapter != null && !_activeAdapter!.discovering) {
-      await _ensureInitialized();
-      print('startScan invoke success');
+    await _ensureInitialized();
+    _log('startScan invoke success');
 
+    if (!_activeAdapter!.discovering) {
       _activeAdapter!.startDiscovery();
       _client.devices.forEach(_onDeviceAdd);
     }
@@ -68,10 +85,10 @@ class QuickBlueLinux extends QuickBluePlatform {
 
   @override
   Future<void> stopScan() async {
-    if (_activeAdapter != null && _activeAdapter!.discovering) {
-      await _ensureInitialized();
-      print('stopScan invoke success');
+    await _ensureInitialized();
+    _log('stopScan invoke success');
 
+    if (!_activeAdapter!.discovering) {
       _activeAdapter!.stopDiscovery();
     }
   }
@@ -91,97 +108,95 @@ class QuickBlueLinux extends QuickBluePlatform {
     });
   }
 
+  BlueZDevice _findDeviceById(String deviceId) {
+    var device = _client.devices.firstWhereOrNull((device) => device.address == deviceId);
+    if (device == null) {
+      throw Exception('Unknown deviceId:$deviceId');
+    }
+    return device;
+  }
+
   @override
   void connect(String deviceId) {
-    var device = _client.devices.firstWhereOrNull((device) => device.address == deviceId);
-    if (device != null) {
-      // if (!device.paired) {
-      //   device.pair().then((voi) => device.connect().then((voi) => print("Connected!")));
-      // } else {
-      device.connect().then((voi) => print("Connected!"));
-      // }
-    }
+    _findDeviceById(deviceId).connect().then((_) {
+      onConnectionChanged?.call(deviceId, BlueConnectionState.connected);
+    });
   }
 
   @override
   void disconnect(String deviceId) {
-    var device = _client.devices.firstWhereOrNull((device) => device.address == deviceId);
-    if (device != null) {
-      device.disconnect().then((voi) => print("Disconnected!"));
-    }
-  }
-
-  BlueZDevice? _getDeviceById(String deviceId) {
-    return _client.devices.firstWhereOrNull((device) => device.address == deviceId);
-  }
-
-  BlueZGattCharacteristic? _getGattCharacteristicById(String deviceId, String characteristic) {
-    var device = _getDeviceById(deviceId);
-    if (device != null) {
-      for (var s in device.gattServices) {
-        for (var c in s.characteristics) {
-          if (c.uuid.toString() == characteristic) {
-            return c;
-          }
-        }
-      }
-    }
-    return null;
+    _findDeviceById(deviceId).disconnect().then((_) {
+      onConnectionChanged?.call(deviceId, BlueConnectionState.disconnected);
+    });
   }
 
   @override
   void discoverServices(String deviceId) {
-    var device = _getDeviceById(deviceId);
-    if (device != null) {
-      print("Services ${device.gattServices.length}");
-      for (var gattService in device.gattServices) {
-        List<String> characteristics = [];
-        for (var characteristic in gattService.characteristics) {
-          characteristics.add(characteristic.uuid.toString());
-        }
-        onServiceDiscovered?.call(deviceId, gattService.uuid.toString(), characteristics);
+    var device = _findDeviceById(deviceId);
+
+    for (var service in device.gattServices) {
+      _log("Service ${service.uuid}");
+      for (var characteristic in service.characteristics) {
+        _log("    Characteristic ${characteristic.uuid}");
       }
+
+      var characteristics = service.characteristics.map((e) => e.uuid.toString()).toList();
+      onServiceDiscovered?.call(deviceId, service.uuid.toString(), characteristics);
     }
   }
 
+  BlueZGattCharacteristic _getCharacteristic(String deviceId, String service, String characteristic) {
+    var device = _findDeviceById(deviceId);
+    var s = device.gattServices.firstWhereOrNull((s) => s.uuid.toString() == service);
+    var c = s?.characteristics.firstWhereOrNull((c) => c.uuid.toString() == characteristic);
+
+    if (c == null) {
+      throw Exception('Unknown characteristic:$characteristic');
+    }
+    return c;
+  }
+
+  final Map<String, StreamSubscription<List<String>>> _characteristicPropertiesSubscriptions = {};
+
   @override
   Future<void> setNotifiable(String deviceId, String service, String characteristic, BleInputProperty bleInputProperty) async {
-    var c = _getGattCharacteristicById(deviceId, characteristic);
-    if (c != null) {
-      if (bleInputProperty == BleInputProperty.disabled) {
-        c.stopNotify();
-      } else {
-        c.propertiesChanged.listen((names) {
-          if (names.contains('Value')) {
-            onValueChanged?.call(deviceId, characteristic, Uint8List.fromList(c.value));
-          }
-        });
-        onValueChanged?.call(deviceId, characteristic, Uint8List.fromList(c.value));
-        c.startNotify();
+    var c = _getCharacteristic(deviceId, service, characteristic);
+
+    if (bleInputProperty != BleInputProperty.disabled) {
+      c.startNotify();
+      void onPropertiesChanged(properties) {
+        if (properties.contains('Value')) {
+          _log('onCharacteristicPropertiesChanged $characteristic, ${hex.encode(c.value)}');
+          onValueChanged?.call(deviceId, characteristic, Uint8List.fromList(c.value));
+        }
       }
+
+      _characteristicPropertiesSubscriptions[characteristic] ??= c.propertiesChanged.listen(onPropertiesChanged);
+    } else {
+      c.stopNotify();
+      _characteristicPropertiesSubscriptions.remove(characteristic)?.cancel();
     }
   }
 
   @override
   Future<void> readValue(String deviceId, String service, String characteristic) async {
-    var c = _getGattCharacteristicById(deviceId, characteristic);
-    if (c != null) {
-      var data = await c.readValue();
-      Uint8List value = Uint8List.fromList(data);
-      onValueChanged?.call(deviceId, characteristic, value);
-    }
+    var c = _getCharacteristic(deviceId, service, characteristic);
+
+    var data = await c.readValue();
+    _log('readValue $characteristic, ${hex.encode(data)}');
+    onValueChanged?.call(deviceId, characteristic, Uint8List.fromList(data));
   }
 
   @override
   Future<void> writeValue(String deviceId, String service, String characteristic, Uint8List value, BleOutputProperty bleOutputProperty) async {
-    var c = _getGattCharacteristicById(deviceId, characteristic);
-    if (c != null) {
-      if (bleOutputProperty == BleOutputProperty.withResponse) {
-        await c.writeValue(value, type: BlueZGattCharacteristicWriteType.request);
-      } else {
-        await c.writeValue(value, type: BlueZGattCharacteristicWriteType.command);
-      }
+    var c = _getCharacteristic(deviceId, service, characteristic);
+
+    if (bleOutputProperty == BleOutputProperty.withResponse) {
+      await c.writeValue(value, type: BlueZGattCharacteristicWriteType.request);
+    } else {
+      await c.writeValue(value, type: BlueZGattCharacteristicWriteType.command);
     }
+    _log('writeValue $characteristic, ${hex.encode(value)}');
   }
 
   @override
