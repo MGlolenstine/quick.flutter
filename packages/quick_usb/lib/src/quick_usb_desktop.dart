@@ -32,7 +32,8 @@ class QuickUsbLinux extends _QuickUsbDesktop {
   // For example/.dart_tool/flutter_build/generated_main.dart
   static registerWith() {
     QuickUsbPlatform.instance = QuickUsbLinux();
-    _libusb = Libusb(DynamicLibrary.open('${File(Platform.resolvedExecutable).parent.path}/lib/libusb-1.0.23.so'));
+    _libusb = Libusb(DynamicLibrary.open(
+        '${File(Platform.resolvedExecutable).parent.path}/lib/libusb-1.0.23.so'));
   }
 }
 
@@ -89,7 +90,8 @@ class _QuickUsbDesktop extends QuickUsbPlatform {
   }
 
   @override
-  Future<List<UsbDeviceDescription>> getDevicesWithDescription({bool requestPermission = true}) async {
+  Future<List<UsbDeviceDescription>> getDevicesWithDescription(
+      {bool requestPermission = true}) async {
     var devices = await getDeviceList();
     var result = <UsbDeviceDescription>[];
     for (var device in devices) {
@@ -99,7 +101,8 @@ class _QuickUsbDesktop extends QuickUsbPlatform {
   }
 
   @override
-  Future<UsbDeviceDescription> getDeviceDescription(UsbDevice usbDevice, {bool requestPermission = true}) async {
+  Future<UsbDeviceDescription> getDeviceDescription(UsbDevice usbDevice,
+      {bool requestPermission = true}) async {
     String? manufacturer;
     String? product;
     String? serialNumber;

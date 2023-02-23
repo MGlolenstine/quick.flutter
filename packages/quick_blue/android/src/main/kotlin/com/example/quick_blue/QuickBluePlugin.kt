@@ -210,7 +210,7 @@ class QuickBluePlugin: FlutterPlugin, MethodCallHandler, EventChannel.StreamHand
     }
 
     override fun onScanResult(callbackType: Int, result: ScanResult) {
-      //Log.v(TAG, "onScanResult: $callbackType + $result")
+      Log.v(TAG, "onScanResult: $callbackType + $result")
       scanResultSink?.success(mapOf<String, Any>(
               "name" to (result.device.name ?: ""),
               "deviceId" to result.device.address,
@@ -306,11 +306,6 @@ class QuickBluePlugin: FlutterPlugin, MethodCallHandler, EventChannel.StreamHand
 
     override fun onCharacteristicWrite(gatt: BluetoothGatt?, characteristic: BluetoothGattCharacteristic, status: Int) {
       Log.v(TAG, "onCharacteristicWrite ${characteristic.uuid}, ${characteristic.value.contentToString()} $status")
-      val addr = gatt!!.device.address;
-      sendMessage(messageConnector, mapOf(
-        "deviceId" to addr,
-        "written" to status
-      ))
     }
 
     override fun onCharacteristicChanged(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic) {
@@ -338,7 +333,7 @@ fun Short.toByteArray(byteOrder: ByteOrder = ByteOrder.LITTLE_ENDIAN): ByteArray
         ByteBuffer.allocate(2 /*Short.SIZE_BYTES*/).order(byteOrder).putShort(this).array()
 
 fun BluetoothGatt.getCharacteristic(service: String, characteristic: String): BluetoothGattCharacteristic? =
-        getService(UUID.fromString(service))?.getCharacteristic(UUID.fromString(characteristic))
+        getService(UUID.fromString(service)).getCharacteristic(UUID.fromString(characteristic))
 
 private val DESC__CLIENT_CHAR_CONFIGURATION = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
 
@@ -349,6 +344,6 @@ fun BluetoothGatt.setNotifiable(gattCharacteristic: BluetoothGattCharacteristic,
     "indication" -> BluetoothGattDescriptor.ENABLE_INDICATION_VALUE to true
     else -> BluetoothGattDescriptor.DISABLE_NOTIFICATION_VALUE to false
   }
-  descriptor?.value = value
-  setCharacteristicNotification(descriptor?.characteristic, enable) && writeDescriptor(descriptor)
+  descriptor.value = value
+  setCharacteristicNotification(descriptor.characteristic, enable) && writeDescriptor(descriptor)
 }

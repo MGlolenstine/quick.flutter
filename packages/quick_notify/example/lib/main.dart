@@ -34,7 +34,8 @@ class _MyAppState extends State<MyApp> {
                 ElevatedButton(
                   child: Text('requestPermission'),
                   onPressed: () async {
-                    var requestPermission = await QuickNotify.requestPermission();
+                    var requestPermission =
+                        await QuickNotify.requestPermission();
                     print('requestPermission $requestPermission');
                   },
                 ),

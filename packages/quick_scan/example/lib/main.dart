@@ -39,7 +39,8 @@ class _MyAppState extends State<MyApp> {
               await checkAndRequestPermission();
               setState(() => permitted = true);
             } catch (e) {
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+              ScaffoldMessenger.of(context)
+                  .showSnackBar(SnackBar(content: Text(e.toString())));
             }
           },
         );

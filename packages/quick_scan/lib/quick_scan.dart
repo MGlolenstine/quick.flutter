@@ -14,7 +14,7 @@ class ScanView extends StatefulWidget {
   const ScanView({
     Key? key,
     required this.callback,
-  }): super(key: key);
+  }) : super(key: key);
 
   @override
   State<StatefulWidget> createState() => _ScanViewState();
@@ -24,7 +24,8 @@ class _ScanViewState extends State<ScanView> {
   StreamSubscription? scanResultSubscription;
 
   void onPlatformViewCreated(int id) {
-    var stream = EventChannel('quick_scan/scanview_$id/event').receiveBroadcastStream();
+    var stream =
+        EventChannel('quick_scan/scanview_$id/event').receiveBroadcastStream();
     scanResultSubscription = stream.listen((result) {
       widget.callback(result);
     });

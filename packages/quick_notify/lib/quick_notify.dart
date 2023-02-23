@@ -12,8 +12,9 @@ class QuickNotify {
   static Future<void> notify({
     String title = 'quick_notify',
     String? content,
-  }) => _platform.notify(
-    title: title,
-    content: content,
-  );
+  }) =>
+      _platform.notify(
+        title: title,
+        content: content,
+      );
 }
