@@ -333,7 +333,7 @@ fun Short.toByteArray(byteOrder: ByteOrder = ByteOrder.LITTLE_ENDIAN): ByteArray
         ByteBuffer.allocate(2 /*Short.SIZE_BYTES*/).order(byteOrder).putShort(this).array()
 
 fun BluetoothGatt.getCharacteristic(service: String, characteristic: String): BluetoothGattCharacteristic? =
-        getService(UUID.fromString(service)).getCharacteristic(UUID.fromString(characteristic))
+        getService(UUID.fromString(service))?.getCharacteristic(UUID.fromString(characteristic))
 
 private val DESC__CLIENT_CHAR_CONFIGURATION = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
 
