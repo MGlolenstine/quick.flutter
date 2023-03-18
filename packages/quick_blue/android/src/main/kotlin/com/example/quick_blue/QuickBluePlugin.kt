@@ -152,10 +152,32 @@ class QuickBluePlugin: FlutterPlugin, MethodCallHandler, EventChannel.StreamHand
         val c = gatt.getCharacteristic(service, characteristic)
                 ?: return result.error("IllegalArgument", "Unknown characteristic: $characteristic", null)
         c.value = value
-        if (gatt.writeCharacteristic(c))
-          result.success(null)
-        else
-          result.error("Characteristic unavailable", null, null)
+
+        var ret_val = gatt.writeCharacteristic(c, value, BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT)
+        val delay = 20L; //ms
+        val max_counter = 10; //repeats
+        var counter = 0;
+
+        while (ret_val == BluetoothStatusCodes.ERROR_GATT_WRITE_REQUEST_BUSY){
+          ret_val = gatt.writeCharacteristic(c, value, BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT)
+          if (counter > max_counter){
+            break;
+          }
+          counter++;
+          Thread.sleep(delay);
+        }
+    
+        if (ret_val == BluetoothStatusCodes.SUCCESS) {
+          result.success(null);
+          Log.v(TAG, "\n-------------\nRetried: ${counter.toString()} times before success\n---------------")
+        } else {
+          result.error("Characteristic write failed", ret_val.toString(), null)
+        }
+
+        // if (gatt.writeCharacteristic(c, value, BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT))
+        //   result.success(null)
+        // else
+        //   result.error("Characteristic write failed", null, null)
       }
       "requestMtu" -> {
         val deviceId = call.argument<String>("deviceId")!!
