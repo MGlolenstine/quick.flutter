@@ -153,13 +153,15 @@ class QuickBluePlugin: FlutterPlugin, MethodCallHandler, EventChannel.StreamHand
                 ?: return result.error("IllegalArgument", "Unknown characteristic: $characteristic", null)
         c.value = value
 
-        var ret_val = gatt.writeCharacteristic(c, value, BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT)
-        val delay = 20L; //ms
+        var ret_val = gatt.writeCharacteristic(c, value, BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE)
+        // var ret_val = gatt.writeCharacteristic(c, value, BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT)
+        val delay = 50L; //ms
         val max_counter = 10; //repeats
         var counter = 0;
 
         while (ret_val == BluetoothStatusCodes.ERROR_GATT_WRITE_REQUEST_BUSY){
-          ret_val = gatt.writeCharacteristic(c, value, BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT)
+          ret_val = gatt.writeCharacteristic(c, value, BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE)
+          // ret_val = gatt.writeCharacteristic(c, value, BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT)
           if (counter > max_counter){
             break;
           }
@@ -233,8 +235,10 @@ class QuickBluePlugin: FlutterPlugin, MethodCallHandler, EventChannel.StreamHand
 
     override fun onScanResult(callbackType: Int, result: ScanResult) {
       Log.v(TAG, "onScanResult: $callbackType + $result")
+      var scanRecord = result.getDevice()?.getName();
+      Log.v(TAG, "onScanRecord: $scanRecord")
       scanResultSink?.success(mapOf<String, Any>(
-              "name" to (result.device.name ?: ""),
+              "name" to (scanRecord ?: ""),
               "deviceId" to result.device.address,
               "manufacturerDataHead" to (result.manufacturerDataHead ?: byteArrayOf()),
               "rssi" to result.rssi
