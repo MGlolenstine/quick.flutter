@@ -104,7 +104,7 @@ class QuickBluePlugin: FlutterPlugin, MethodCallHandler, EventChannel.StreamHand
       "disconnect" -> {
         val deviceId = call.argument<String>("deviceId")!!
         val gatt = knownGatts.find { it.device.address == deviceId }
-                ?: return result.error("IllegalArgument", "Unknown deviceId: $deviceId", null)
+                ?: return result.error("IllegalArgument", "Unknown deviceId: $deviceId", "Disconnect")
         cleanConnection(gatt)
         result.success(null)
         //FIXME If `disconnect` is called before BluetoothGatt.STATE_CONNECTED
@@ -113,7 +113,7 @@ class QuickBluePlugin: FlutterPlugin, MethodCallHandler, EventChannel.StreamHand
       "discoverServices" -> {
         val deviceId = call.argument<String>("deviceId")!!
         val gatt = knownGatts.find { it.device.address == deviceId }
-                ?: return result.error("IllegalArgument", "Unknown deviceId: $deviceId", null)
+                ?: return result.error("IllegalArgument", "Unknown deviceId: $deviceId", "Discover services")
         gatt.discoverServices()
         result.success(null)
       }
@@ -123,9 +123,9 @@ class QuickBluePlugin: FlutterPlugin, MethodCallHandler, EventChannel.StreamHand
         val characteristic = call.argument<String>("characteristic")!!
         val bleInputProperty = call.argument<String>("bleInputProperty")!!
         val gatt = knownGatts.find { it.device.address == deviceId }
-                ?: return result.error("IllegalArgument", "Unknown deviceId: $deviceId", null)
+                ?: return result.error("IllegalArgument", "Unknown deviceId: $deviceId", "Set notifiable")
         val c = gatt.getCharacteristic(service, characteristic)
-                ?: return result.error("IllegalArgument", "Unknown characteristic: $characteristic", null)
+                ?: return result.error("IllegalArgument", "Unknown characteristic: $characteristic", "Set notifiable")
         gatt.setNotifiable(c, bleInputProperty)
         result.success(null)
       }
@@ -134,9 +134,9 @@ class QuickBluePlugin: FlutterPlugin, MethodCallHandler, EventChannel.StreamHand
         val service = call.argument<String>("service")!!
         val characteristic = call.argument<String>("characteristic")!!
         val gatt = knownGatts.find { it.device.address == deviceId }
-                ?: return result.error("IllegalArgument", "Unknown deviceId: $deviceId", null)
+                ?: return result.error("IllegalArgument", "Unknown deviceId: $deviceId", "Read value")
         val c = gatt.getCharacteristic(service, characteristic)
-                ?: return result.error("IllegalArgument", "Unknown characteristic: $characteristic", null)
+                ?: return result.error("IllegalArgument", "Unknown characteristic: $characteristic", "Read value")
         if (gatt.readCharacteristic(c))
           result.success(null)
         else
@@ -148,33 +148,61 @@ class QuickBluePlugin: FlutterPlugin, MethodCallHandler, EventChannel.StreamHand
         val characteristic = call.argument<String>("characteristic")!!
         val value = call.argument<ByteArray>("value")!!
         val gatt = knownGatts.find { it.device.address == deviceId }
-                ?: return result.error("IllegalArgument", "Unknown deviceId: $deviceId", null)
+                ?: return result.error("IllegalArgument", "Unknown deviceId: $deviceId", "Write value")
         val c = gatt.getCharacteristic(service, characteristic)
-                ?: return result.error("IllegalArgument", "Unknown characteristic: $characteristic", null)
+                ?: return result.error("IllegalArgument", "Unknown characteristic: $characteristic", "Write value")
         c.value = value
 
-        var ret_val = gatt.writeCharacteristic(c, value, BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE)
-        // var ret_val = gatt.writeCharacteristic(c, value, BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT)
         val delay = 50L; //ms
         val max_counter = 10; //repeats
         var counter = 0;
 
-        while (ret_val == BluetoothStatusCodes.ERROR_GATT_WRITE_REQUEST_BUSY){
-          ret_val = gatt.writeCharacteristic(c, value, BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE)
-          // ret_val = gatt.writeCharacteristic(c, value, BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT)
-          if (counter > max_counter){
-            break;
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+          var ret_val = gatt.writeCharacteristic(c)
+          var fail = !ret_val
+
+          while (fail){
+            ret_val = gatt.writeCharacteristic(c)
+            fail = !ret_val
+            // ret_val = gatt.writeCharacteristic(c, value, BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT)
+            if (counter > max_counter){
+              break;
+            }
+            counter++;
+            Thread.sleep(delay);
           }
-          counter++;
-          Thread.sleep(delay);
-        }
     
-        if (ret_val == BluetoothStatusCodes.SUCCESS) {
-          result.success(null);
-          Log.v(TAG, "\n-------------\nRetried: ${counter.toString()} times before success\n---------------")
-        } else {
-          result.error("Characteristic write failed", ret_val.toString(), null)
+          if (!fail) {
+            result.success(null);
+            Log.v(TAG, "\n-------------\nRetried: ${counter.toString()} times before success\n---------------")
+          } else {
+            result.error("Characteristic write failed", ret_val.toString(), null)
+          }
+        }else{
+          var ret_val = gatt.writeCharacteristic(c, value, BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE)
+          
+          var fail = ret_val == BluetoothStatusCodes.ERROR_GATT_WRITE_REQUEST_BUSY
+
+          while (fail){
+            ret_val = gatt.writeCharacteristic(c, value, BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE)
+            fail = ret_val == BluetoothStatusCodes.ERROR_GATT_WRITE_REQUEST_BUSY
+            // ret_val = gatt.writeCharacteristic(c, value, BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT)
+            if (counter > max_counter){
+              break;
+            }
+            counter++;
+            Thread.sleep(delay);
+          }
+    
+          if (!fail) {
+            result.success(null);
+            Log.v(TAG, "\n-------------\nRetried: ${counter.toString()} times before success\n---------------")
+          } else {
+            result.error("Characteristic write failed", ret_val.toString(), null)
+          }
         }
+        // var ret_val = gatt.writeCharacteristic(c, value, BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT)
+
 
         // if (gatt.writeCharacteristic(c, value, BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT))
         //   result.success(null)
@@ -185,7 +213,7 @@ class QuickBluePlugin: FlutterPlugin, MethodCallHandler, EventChannel.StreamHand
         val deviceId = call.argument<String>("deviceId")!!
         val expectedMtu = call.argument<Int>("expectedMtu")!!
         val gatt = knownGatts.find { it.device.address == deviceId }
-                ?: return result.error("IllegalArgument", "Unknown deviceId: $deviceId", null)
+                ?: return result.error("IllegalArgument", "Unknown deviceId: $deviceId", "Request MTU")
         gatt.requestMtu(expectedMtu)
         result.success(null)
       }
@@ -235,10 +263,10 @@ class QuickBluePlugin: FlutterPlugin, MethodCallHandler, EventChannel.StreamHand
 
     override fun onScanResult(callbackType: Int, result: ScanResult) {
       Log.v(TAG, "onScanResult: $callbackType + $result")
-      var scanRecord = result.getDevice()?.getName();
-      Log.v(TAG, "onScanRecord: $scanRecord")
+      // var scanRecord = result.getDevice()?.getName();
+      // Log.v(TAG, "onScanRecord: $scanRecord")
       scanResultSink?.success(mapOf<String, Any>(
-              "name" to (scanRecord ?: ""),
+              "name" to (result.device.name ?: ""),
               "deviceId" to result.device.address,
               "manufacturerDataHead" to (result.manufacturerDataHead ?: byteArrayOf()),
               "rssi" to result.rssi
