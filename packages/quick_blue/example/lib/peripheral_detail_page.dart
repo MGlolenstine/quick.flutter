@@ -106,7 +106,7 @@ class _PeripheralDetailPageState extends State<PeripheralDetailPage> {
   void _handleValueChange(
       String deviceId, String characteristicId, Uint8List value) {
     if (deviceId == widget.deviceId && characteristicId == receive) {
-      receivedDataController.text += String.fromCharCodes(value);
+      receivedDataController.text += utf8.decode(value);
       setState(() {});
     }
   }
