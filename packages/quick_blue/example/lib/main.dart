@@ -3,7 +3,9 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_easyloading/flutter_easyloading.dart';
 import 'package:logging/logging.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:quick_blue/quick_blue.dart';
 
 import 'peripheral_detail_page.dart';
@@ -20,6 +22,7 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
+  bool scanning = false;
   StreamSubscription<BlueScanResult>? _scanResultSubscription;
   StreamSubscription<AvailabilityState>? _availabilitySubscription;
 
@@ -31,11 +34,12 @@ class _MyAppState extends State<MyApp> {
       debugPrint('Bluetooth state: ${state.toString()}');
     });
 
-    if (kDebugMode) {
-      QuickBlue.setLogger(Logger('quick_blue_example'));
-    }
+    // if (kDebugMode) {
+    //   QuickBlue.setLogger(Logger('quick_blue_example'));
+    // }
     _scanResultSubscription = QuickBlue.scanResultStream.listen((result) {
-      if (!_scanResults.any((r) => r.deviceId == result.deviceId)) {
+      if (result.deviceId.startsWith("AA:AA:AA") &&
+          !_scanResults.any((r) => r.deviceId == result.deviceId)) {
         setState(() => _scanResults.add(result));
       }
     });
@@ -50,53 +54,50 @@ class _MyAppState extends State<MyApp> {
 
   @override
   Widget build(BuildContext context) {
+    checkPermissions();
     return MaterialApp(
       home: Scaffold(
         appBar: AppBar(
-          title: const Text('Plugin example app'),
+          title: const Text('Simple Echo app'),
         ),
         body: Column(
           children: [
-            StreamBuilder<AvailabilityState>(
-              stream: QuickBlue.availabilityChangeStream,
-              builder: (context, snapshot) {
-                return Text('Bluetooth state: ${snapshot.data?.toString()}');
-              },
-            ),
-            FutureBuilder(
-              future: QuickBlue.isBluetoothAvailable(),
-              builder: (context, snapshot) {
-                var poweredOn = snapshot.data?.toString() ?? '...';
-                return Text('Bluetooth powered on: $poweredOn');
-              },
-            ),
             _buildButtons(),
             const Divider(color: Colors.blue),
             _buildListView(),
-            _buildPermissionWarning(),
           ],
         ),
       ),
+      builder: EasyLoading.init(),
     );
   }
 
   Widget _buildButtons() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-      children: <Widget>[
-        ElevatedButton(
-          child: const Text('startScan'),
-          onPressed: () {
-            QuickBlue.startScan();
-          },
-        ),
-        ElevatedButton(
-          child: const Text('stopScan'),
-          onPressed: () {
-            QuickBlue.stopScan();
-          },
-        ),
-      ],
+    Widget button;
+    if (scanning) {
+      button = ElevatedButton(
+        child: const Text('stopScan'),
+        onPressed: () {
+          QuickBlue.stopScan();
+          scanning = false;
+          setState(() {});
+        },
+      );
+    } else {
+      button = ElevatedButton(
+        child: const Text('startScan'),
+        onPressed: () {
+          QuickBlue.startScan();
+          scanning = true;
+          _scanResults.clear();
+          setState(() {});
+        },
+      );
+    }
+
+    return SizedBox(
+      width: double.maxFinite,
+      child: button,
     );
   }
 
@@ -106,16 +107,20 @@ class _MyAppState extends State<MyApp> {
     return Expanded(
       child: ListView.separated(
         itemBuilder: (context, index) => ListTile(
-          title:
-              Text('${_scanResults[index].name}(${_scanResults[index].rssi})'),
+          title: Text(_scanResults[index].name),
           subtitle: Text(_scanResults[index].deviceId),
           onTap: () {
+            QuickBlue.stopScan();
+            scanning = false;
+            setState(() {});
             Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => PeripheralDetailPage(
-                      deviceId: _scanResults[index].deviceId),
-                ));
+              context,
+              MaterialPageRoute(
+                builder: (context) => PeripheralDetailPage(
+                  deviceId: _scanResults[index].deviceId,
+                ),
+              ),
+            );
           },
         ),
         separatorBuilder: (context, index) => const Divider(),
@@ -124,13 +129,20 @@ class _MyAppState extends State<MyApp> {
     );
   }
 
-  Widget _buildPermissionWarning() {
-    if (Platform.isAndroid) {
-      return Container(
-        margin: const EdgeInsets.symmetric(horizontal: 10),
-        child: const Text('BLUETOOTH_SCAN/ACCESS_FINE_LOCATION needed'),
-      );
+  Future<bool> checkPermissions() async {
+    bool allowed = true;
+    if (Platform.isAndroid || Platform.isIOS) {
+      if (!await Permission.bluetoothScan.isGranted) {
+        allowed = allowed &&
+            PermissionStatus.granted ==
+                await Permission.bluetoothScan.request();
+      }
+      if (!await Permission.bluetoothConnect.isGranted) {
+        allowed = allowed &&
+            PermissionStatus.granted ==
+                await Permission.bluetoothConnect.request();
+      }
     }
-    return Container();
+    return allowed;
   }
 }

@@ -351,6 +351,7 @@ class QuickBluePlugin: FlutterPlugin, MethodCallHandler, EventChannel.StreamHand
     }
 
     override fun onMtuChanged(gatt: BluetoothGatt?, mtu: Int, status: Int) {
+      Log.v(TAG, "onMtuChanged ${mtu}, ${status}")
       if (status == BluetoothGatt.GATT_SUCCESS) {
         sendMessage(messageConnector, mapOf(
           "mtuConfig" to mtu

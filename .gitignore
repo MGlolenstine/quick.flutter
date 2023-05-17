@@ -50,3 +50,5 @@ pubspec.lock
 
 # iOS/macOS related
 Podfile.lock
+
+/.direnv
